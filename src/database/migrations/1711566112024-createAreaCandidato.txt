@@ -1,0 +1,42 @@
+import { MigrationInterface, QueryRunner, Table, TableForeignKey } from "typeorm"
+
+export class CreateAreaCandidato1711566112024 implements MigrationInterface {
+
+    public async up(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.createTable(new Table({
+            name: "area_candidato",
+            columns: [
+                {
+                    name: "idArea",
+                    type: "int",
+                    isPrimary: true,
+                },
+                {
+                    name: "idconta",
+                    type: "int",
+                    isPrimary: true,
+                },
+            ]
+        }), true);
+
+
+        await queryRunner.createForeignKey("area_candidato", new TableForeignKey({
+            columnNames: ["idArea"],
+            referencedTableName: "area",
+            referencedColumnNames: ["idArea"],
+            onDelete: "CASCADE",
+        }));
+
+        await queryRunner.createForeignKey("area_candidato", new TableForeignKey({
+            columnNames: ["idconta"],
+            referencedTableName: "candidato",
+            referencedColumnNames: ["idconta"],
+            onDelete: "CASCADE",
+        }));
+
+    }
+
+    public async down(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.dropTable("area_candidato");
+    }
+}

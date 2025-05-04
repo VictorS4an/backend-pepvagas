@@ -1,0 +1,308 @@
+import dotenv from 'dotenv';
+import nodemailer from 'nodemailer';
+
+dotenv.config(
+    {
+        path: __dirname + "/../.env"
+    }
+);
+
+const transport = nodemailer.createTransport({
+    host: "smtp.gmail.com",
+    port: 587,
+    secure: false,
+    auth: {
+        user: "noreply.pepvagas@gmail.com",
+        pass: "lhak hzlk yuvz ungr"
+    },
+    tls: {
+        rejectUnauthorized: false
+    }
+
+});
+const transport = nodemailer.createTransport({
+    host: "nao-responda@ifsp.edu.br",
+    port: 587,
+    secure: false,
+    auth: {
+        user: "eventos.pep@nao-responda.ifsp.edu.br",
+        pass: "#9zoXO"
+    }
+    //,tls: { rejectUnauthorized: false }
+
+});
+
+function generatePassword() {
+    const lowercaseLetters = 'abcdefghijklmnopqrstuvwxyz';
+    const uppercaseLetters = lowercaseLetters.toUpperCase();
+    const numbers = '0123456789';
+    const specialCharacters = '!@#$%^&*_';
+  
+    const allCharacters = lowercaseLetters + uppercaseLetters + numbers + specialCharacters;
+  
+    const getRandomChar = (characters: string | any[]) => characters[Math.floor(Math.random() * characters.length)];
+  
+    const getRandomFrom = (characters: string | any[], count: number) => Array.from({ length: count }, () => getRandomChar(characters)).join('');
+  
+    const password = [
+      getRandomChar(lowercaseLetters),
+      getRandomChar(uppercaseLetters),
+      getRandomChar(numbers), 
+      getRandomChar(specialCharacters)
+    ].join('') + getRandomFrom(allCharacters, 4);
+  
+    return password.split('').sort(() => Math.random() - 0.5).join(''); // randomly shuffle
+  }
+
+async function sendEmail(email: string, password: string) {
+
+
+    const mailOptions = {
+        from: 'noreply.pepvagas@gmail.com',
+        to: email,
+        subject: 'PEPVagas - Recuperação de senha',
+        html: `
+        <div style="background-color: #f2f2f2; padding: 20px; font-family: Arial, Helvetica, sans-serif;">
+        <h1 style="color: #f2f2f2; font-size: 24px; text-align: center; background-color: #333; padding: 10px;">PEPVagas</h1>
+        <p style="color: #333; font-size: 18px;">Sua nova senha é:</p>
+        <div style="display: flex; justify-content: center; align-items: center; font-size: 24px; margin-top: 20px;">${password}</div>
+        <p style="color: #333; font-size: 16px;">Mantenha sua nova senha segura e lembre-se de alterá-la para uma senha forte e única.</p>
+        <div style="display: flex; justify-content: center; align-items: center; margin-top: 20px;">
+            <p style="color: #333; font-size: 14px;">Este é um e-mail automático, não responda.</p>
+        </div>
+    </div>
+      `
+
+    };
+
+    transport.sendMail(mailOptions, (error: any, info: any) => {
+        if (error) {
+            console.log(error);
+        } else {
+            console.log('Email enviado: ' + info.response);
+        }
+    });
+}
+
+async function sendEmailCurriculum(email: string, curriculo: any, pcd: any, body: any) {
+    try {
+
+    const nome = body.candidato.nome;
+    const titulo_vaga = body.vaga.titulo_vaga;
+    let pcdLabel = '';
+    if (pcd != null) {
+        pcdLabel = ' e relatório de PCD';
+    }
+    const mailOptions = {
+        from: 'noreply.pepvagas@gmail.com',
+        to: email,
+        subject: 'PEPVagas - Envio de currículo',
+        html: `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Candidatura - Seu Nome</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    margin: 0;
+                    padding: 0;
+                    background-color: #f4f4f4;
+                }
+        
+                .container {
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    background-color: #ffffff;
+                }
+        
+                h1, p {
+                    text-align: center;
+                }
+        
+                img {
+                    max-width: 100%;
+                    height: auto;
+                    display: block;
+                    margin: 0 auto;
+                }
+        
+                .highlight {
+                    background-color: #15842a;
+                    color: #ffffff;
+                    padding: 5px;
+                    border-radius: 5px;
+                }
+        
+                .attachment-instructions {
+                    background-color: #15842a;
+                    color: #ffffff;
+                    padding: 10px;
+                    border-radius: 5px;
+                    margin-top: 20px;
+                }
+        
+                .footer {
+                    margin-top: 20px;
+                    padding: 10px;
+                    background-color: #15842a;
+                    color: #ffffff;
+                    text-align: center;
+                }
+        
+                @media screen and (max-width: 600px) {
+                    .container {
+                        width: 100%;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>Candidato interessado em vaga</h1>
+                <p>O candidato(a) ${nome} está interesado na vaga: ${titulo_vaga}</p>
+                <p>Está em anexo:Curriculo${pcdLabel}</p>
+            </div>
+        </body>
+        </html>
+      `,
+        attachments: [
+            {
+                filename: 'curriculum.pdf',
+                content: curriculo
+            },
+            {
+                filename: 'pcd.pdf',
+                content: pcd
+            }
+        ]
+
+    };
+
+    transport.sendMail(mailOptions, (error: any, info: any) => {
+        if (error) {
+            console.log("Erro: " + error);
+        } else {
+            console.log('Email enviado: ' + info.response);
+        }
+    });
+    }catch (error) {
+        console.log(error);
+    }
+
+}
+
+async function sendEmailNotification(candidato: any, vaga: any, url: any, message: any) {
+    let cabecalho = '';
+    if (message == 'perfeita'){
+        message = " uma empresa está oferencendo uma vaga que é perfeita para você";
+        cabecalho = "PEPVagas - Vaga perfeita para você";
+    }else {
+        message = " uma empresa está oferencendo uma vaga que é de seu interesse para você";
+        cabecalho = "PEPVagas - Vaga de interesse para você";
+    }
+
+
+
+    const mailOptions = {
+        from: 'noreply.pepvagas@gmail.com',
+        to: candidato.email,
+        subject: cabecalho,
+        html: `
+        <!DOCTYPE html>
+        <html lang="en">
+        <head>
+            <meta charset="UTF-8">
+            <meta name="viewport" content="width=device-width, initial-scale=1.0">
+            <title>Candidatura - Seu Nome</title>
+            <style>
+                body {
+                    font-family: Arial, sans-serif;
+                    margin: 0;
+                    padding: 0;
+                    background-color: #f4f4f4;
+                }
+        
+                .container {
+                    max-width: 600px;
+                    margin: 0 auto;
+                    padding: 20px;
+                    background-color: #ffffff;
+                }
+        
+                h1, p {
+                    text-align: center;
+                }
+        
+                img {
+                    max-width: 100%;
+                    height: auto;
+                    display: block;
+                    margin: 0 auto;
+                }
+        
+                .highlight {
+                    background-color: #15842a;
+                    color: #ffffff;
+                    padding: 5px;
+                    border-radius: 5px;
+                }
+        
+                .attachment-instructions {
+                    background-color: #15842a;
+                    color: #ffffff;
+                    padding: 10px;
+                    border-radius: 5px;
+                    margin-top: 20px;
+                }
+        
+                .footer {
+                    margin-top: 20px;
+                    padding: 10px;
+                    background-color: #15842a;
+                    color: #ffffff;
+                    text-align: center;
+                }
+        
+                @media screen and (max-width: 600px) {
+                    .container {
+                        width: 100%;
+                    }
+                }
+            </style>
+        </head>
+        <body>
+            <div class="container">
+                <h1>Vaga de interesse para você</h1>
+                <p>Olá ${candidato.nome}, ${message}</p>
+                <ul>
+                    <li>Titulo: ${vaga.titulo_vaga}</li>
+                    <li>Descrição: ${vaga.descricao}</li>
+                    <li>Salario: ${vaga.salario}</li>
+                    <li>Local: ${vaga.local}</li>
+                    <li>${vaga.maisInfo}</li>
+                </ul>
+            </div>
+        </body>
+        </html>
+        `
+
+    }
+
+    transport.sendMail(mailOptions, (error: any, info: any) => {
+        if (error) {
+            console.log("Erro: " + error);
+        } else {
+            console.log('Email enviado: ' + info.response);
+        }
+    });
+
+}
+
+export {generatePassword};
+export {sendEmail};
+export {sendEmailCurriculum};
+export {sendEmailNotification};

@@ -1,0 +1,56 @@
+{
+  "name": "backend",
+  "version": "1.2.5",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "dev": "ts-node-dev --transpile-only --ignore-watch node_modules src/server.ts",
+    "typeorm": "ts-node-dev ./node_modules/typeorm/cli.js",
+    "package": "npx tsc && npx pkg . --compress",
+    "migration:run": "npm run -- typeorm migration:run -d src/database/data-source.ts",
+    "migration:generate": "npm run -- typeorm -d src/database/data-source.ts migration:generate ./src/database/migrations"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@capacitor/push-notifications": "^6.0.0",
+    "@types/multer": "^1.4.9",
+    "bcrypt": "^5.1.1",
+    "body-parser": "^1.20.2",
+    "celebrate": "^15.0.3",
+    "cors": "^2.8.5",
+    "date-fns": "^3.6.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.18.2",
+    "firebase-admin": "^11.11.1",
+    "jsonwebtoken": "^9.0.2",
+    "multer": "^1.4.5-lts.1",
+    "mysql2": "^3.6.1",
+    "nodemailer": "^6.9.6",
+    "typeorm": "^0.3.17",
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "@types/bcrypt": "^5.0.0",
+    "@types/cors": "^2.8.14",
+    "@types/express": "^4.17.18",
+    "@types/jsonwebtoken": "^9.0.3",
+    "@types/node": "^20.8.4",
+    "@types/nodemailer": "^6.4.13",
+    "ts-node": "^10.9.1",
+    "ts-node-dev": "^2.0.0",
+    "typescript": "^5.2.2"
+  },
+  "pkg": {
+    "scripts": [
+      "out/**/*.{js,ts}"
+    ],
+    "assets": [
+      "node_modules/**/*"
+    ],
+    "outputPath": "dist"
+  },
+  "bin": "out/backend/src/server.js"
+}

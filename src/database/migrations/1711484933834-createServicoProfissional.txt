@@ -1,0 +1,42 @@
+import { MigrationInterface, QueryRunner, Table, TableForeignKey } from "typeorm"
+
+export class CreateServicoProfissional1711484933834 implements MigrationInterface {
+
+    public async up(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.createTable(new Table({
+            name: "servico_profissional",
+            columns: [
+                {
+                    name: "idconta",
+                    type: "int",
+                    isPrimary: true,
+                },
+                {
+                    name: "idTipoServico",
+                    type: "int",
+                    isPrimary: true,
+                },
+            ]
+        }));
+
+        await queryRunner.createForeignKey("servico_profissional", new TableForeignKey({
+            columnNames: ["idconta"],
+            referencedTableName: "profissional_liberal",
+            referencedColumnNames: ["idconta"],
+            onDelete: "CASCADE",
+        }));
+
+        await queryRunner.createForeignKey("servico_profissional", new TableForeignKey({
+            columnNames: ["idTipoServico"],
+            referencedTableName: "tipo_servico",
+            referencedColumnNames: ["idTipoServico"],
+            onDelete: "CASCADE",
+        }));
+        
+    }
+
+    public async down(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.dropTable("servico_profissional");
+    }
+
+}

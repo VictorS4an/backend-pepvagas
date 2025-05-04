@@ -1,0 +1,152 @@
+@host = "localhost:4001/"
+
+
+# AUTH
+
+### LOGIN
+POST http://localhost:4001/login HTTP/1.1
+content-type: application/json
+
+{
+    "email": "henrique@henrique.com",
+    "senha": "henrique"
+}
+
+# CONTA
+
+### GET CONTAS ATIVAS
+
+GET http://localhost:4001/conta HTTP/1.1
+content-type: application/json
+
+### GET CONTAS DELETADAS E ATIVAS
+
+GET http://localhost:4001/contas/deletadas/ HTTP/1.1
+content-type: application/json
+
+### CREATE CONTA
+
+POST http://localhost:4001/conta HTTP/1.1
+content-type: application/json
+
+{
+    "email":"h.liberato.cavalcante@gmail.com",
+    "senha": "henrique123",
+    "tipo":"A"
+}
+
+### Recuperar senha
+POST http://localhost:4001/conta/recuperacao HTTP/1.1
+content-type: application/json
+
+{
+    "email":"h.liberato.cavalcante@gmail.com"
+}
+
+# Candidato
+
+### CREATE CANDIDATO
+
+POST http://localhost:4001/candidato HTTP/1.1
+content-type: application/json
+
+{
+    "idconta": "1",
+    "nome": "Candidato 1",
+    "nomeSocial": null,
+    "genero": "Masculino",
+    "cpf": "95471792092",
+    "nascimento": "2024-01-02",
+    "pcd": false,
+    "disponibilidade": null,
+    "cidadeInteresse": null,
+    "tipoVaga": null,
+    "pretensaoSalarial": null,
+    "nivelInstrucao": null,
+    "cnh": null,
+    "telefone": null
+}
+
+### GET CANDIDATOS
+
+GET http://localhost:4001/candidato HTTP/1.1
+content-type: application/json
+
+### Find By Id
+
+GET http://localhost:4001/candidato/1 HTTP/1.1
+content-type: application/json
+
+### Find By Nome Social
+
+GET http://localhost:4001/candidato/social HTTP/1.1
+content-type: application/json
+
+### Update Candidato
+
+PUT http://localhost:4001/candidato/1 HTTP/1.1
+content-type: application/json
+
+{
+    "nome": "Candidato 1 Alterado",
+    "nomeSocial": null,
+    "genero": "Masculino",
+    "cpf": "95471792092",
+    "nascimento": "2024-01-02",
+    "pcd": false,
+    "disponibilidade": null,
+    "cidadeInteresse": null,
+    "tipoVaga": null,
+    "pretensaoSalarial": null,
+    "nivelInstrucao": null,
+    "cnh": null,
+    "telefone": null
+}
+
+### Delete Candidato
+
+DELETE http://localhost:4001/candidato/1 HTTP/1.1
+content-type: application/json
+
+
+# Vaga
+
+### CREATE VAGA
+
+POST http://localhost:4001/vaga HTTP/1.1
+content-type: application/json
+
+{
+"idConta": 1,
+"titulo": "Governança de TI",
+"modalidade": "P",
+"tipo": "Estágio",
+"regime": "CLT",
+"descricao": "Faz isso ai mesmo",
+"salario": 2500,
+"pcd": true,
+"dataLimite": "01/01/2024",
+"cidade": "Xique-Xique",
+"nivelInstrucao": "Superior",
+"site": "google.com",
+"idArea": 1,
+"emailCurriculo": "h.liberato.cavalcante@gmail.com"
+}
+
+### GET VAGAS
+GET http://localhost:4001/vaga HTTP/1.1
+content-type: application/json
+
+### Find By Id
+GET http://localhost:4001/vaga/5 HTTP/1.1
+content-type: application/json
+
+### Delete Vaga By Id
+DELETE http://localhost:4001/vaga/1 HTTP/1.1
+content-type: application/json
+
+# Equipe
+
+# Representante
+
+# 

@@ -1,0 +1,614 @@
+import {Request, Response} from "express";
+import {Vaga} from "../database/models/Vaga";
+import {Empresa} from "../database/models/Empresa";
+import {Equipe} from "../database/models/Equipe";
+import {Area} from "../database/models/Area";
+import {Candidato} from "../database/models/Candidato";
+import {Administrador} from "../database/models/Administrador";
+import {Between, Raw, DeepPartial, Equal, IsNull, Like, MoreThan, Not} from "typeorm";
+import {AppDataSource} from "../database/data-source";
+import {sendEmailCurriculum, sendEmailNotification} from './EmailController'
+import FirebaseController from "./firebaseController";
+
+export default class VagaController extends Vaga {
+
+    constructor() {
+        super();
+    }
+
+    async create(request: Request, response: Response) {
+        const file = request.file;
+
+        try {
+            if (!file) {
+                return response.status(400).json({ message: "É necessário enviar um arquivo" });
+            }
+
+            let body = JSON.parse(request.body.vaga);
+            if (body === undefined || !body) {
+                return response.status(400).json({ message: "É necessário enviar os dados da vaga" });
+            }
+
+            const vagaRepository = AppDataSource.getRepository(Vaga);
+            const areaRepository = AppDataSource.getRepository(Area);
+
+            const area = await areaRepository.findOneBy({ idArea: body.idArea });
+
+            if (!area) {
+                return response.status(404).json({message: "Área não encontrada"});
+            }
+
+
+
+            const createdAt = new Date();
+            let {
+                idAdministrador,
+                idEquipe,
+                idEmpresa,
+                idRepresentante,
+                ...vagaData
+            } = request.body;
+
+            vagaData = JSON.parse(request.body.vaga);
+
+
+            const vagaExistente = await vagaRepository.findOne({
+                where: {
+                    idAdministrador,
+                    idEquipe,
+                    idEmpresa,
+                    ...vagaData
+                },
+            });
+
+            console.log("vagaExistente: ", vagaExistente);
+
+            if (vagaExistente) {
+                return response.status(400).json({ message: "Esta vaga já foi publicada." });
+            }
+
+            idAdministrador = idAdministrador === 0 ? null : idAdministrador;
+            idEquipe = idEquipe === 0 ? null : idEquipe;
+            idEmpresa = idEmpresa === 0 ? null : idEmpresa;
+            idRepresentante = idRepresentante === 0 ? null : idRepresentante;
+
+
+            const vaga = vagaRepository.create({
+                ...vagaData,
+                idAdministrador,
+                idEquipe,
+                idEmpresa,
+                idRepresentante,
+                idArea: area.idArea,
+                imagem: file.buffer,
+                createdAt,
+            });
+
+
+            await vagaRepository.save(vaga);
+            await notificarCandidatos(vaga);
+
+            return response.status(200).json(vaga);
+        } catch (error) {
+            console.log("Error creating vaga:", error);
+            return response.status(500).json({message: "Internal Server Error"});
+        }
+
+    }
+
+    async getFile(request: Request, response: Response) {
+        try {
+
+
+            const { id } = request.params;
+            if (!id) return response.status(400).json({ message: "Id não informado" });
+            if (isNaN(+id)) return response.status(400).json({ message: "Id deve ser um número" });
+            const vagasRepository = AppDataSource.getRepository(Vaga);
+            const vaga = await vagasRepository.findOne({ where: { idVaga: +id } });
+            if (!vaga) return response.status(404).json({ message: "Vaga não encontrada" });
+            if (vaga.imagem) {
+                const mimeType = "image/jpeg";
+                const base64 = vaga.imagem.toString('base64');
+                return response.status(200).type(mimeType).send(base64);
+            }
+
+            else {
+                return response.status(404).json({ message: "Arquivo não encontrado" });
+            }
+        } catch (error) {
+            console.log(error)
+            return response.status(500).json({ message: "Erro ao listar profissional", error: error });
+        }
+    }
+
+    async indexAdministrador(request: Request, response: Response) {
+        const vagaRepository = AppDataSource.getRepository(Vaga);
+
+        const vagas = await vagaRepository.find({withDeleted: true, relations: ['idArea2']});
+
+        return response.status(200).json(vagas);
+    }
+
+    async indexCandidato(request: Request, response: Response) {
+        const vagaRepository = AppDataSource.getRepository(Vaga);
+
+        // Data do dia atual
+        const dataAtual = new Date();
+
+        const vagas = await vagaRepository.find(
+            {
+                where: {
+                    data_limite: MoreThan(dataAtual),
+                },
+                relations: ['idArea2'],
+                order: {createdAt: "DESC"}
+            });
+
+        return response.status(200).json(vagas);
+    }
+
+    /**
+     * Vai retornar todas as vagas que batem com os atributos do candidato enviado na requisição
+     * @param request
+     * @param response
+     */
+    async indexForCandidato(request: Request, response: Response) {
+        try {
+
+            const { id } = request.params;
+            const candidatoRepository = AppDataSource.getRepository(Candidato);
+            const vagaRepository = AppDataSource.getRepository(Vaga);
+
+            const candidato = await candidatoRepository.findOne(
+                {
+                    select: ['idCandidato', 'nome', 'email', 'pretensaoSalarial', 'cnh', 'tipoVagaInteresse', 'modalidadeInteresse', 'regiaoInteresse', 'cepInteresse', 'ufInteresse', 'cidadeInteresse', 'areas'],
+                    where: { idCandidato: +id }
+                });
+
+            if (!candidato) {
+                return response.status(404).json({ message: "Candidato não encontrado" });
+            }
+
+            // Data do dia atual
+            const dataAtual = new Date();
+
+            // Faz a consulta no banco de dados para verificar se o candidato tem todos os atributos iguais a vaga
+            const vagasAllMatch = await vagaRepository.find(
+                {
+                    where: {
+                        salario: (Between(candidato.pretensaoSalarial - 1000, candidato.pretensaoSalarial + 1000) && MoreThan(0)) || Equal(candidato.pretensaoSalarial),
+                        cnh: Like('%' + candidato.cnh + '%'),
+                        tipo_vaga: Raw(alias => `:tipo_vaga LIKE  concat('%',concat(tipo_vaga, '%'))`, { tipo_vaga: candidato.tipoVagaInteresse }),
+                        modalidade: Raw(alias => `:modalidade LIKE  concat('%',concat(modalidade, '%'))`, { modalidade: candidato.modalidadeInteresse }),
+                        data_limite: MoreThan(dataAtual),
+                    },
+                    relations: ['idArea2'],
+                    order: { createdAt: "DESC" }
+                }
+            );
+
+            let vagasAllMatchFiltered: any[] = [];
+            // Remove as vagas que tem regiao diferente da vaga
+            if (candidato.regiaoInteresse && candidato.cepInteresse != null && candidato.ufInteresse != null && candidato.cidadeInteresse != null) {
+                vagasAllMatchFiltered = vagasAllMatch.filter(vaga => {
+
+                    // Por enquanto valida se toda a região é igual
+                    // Pode dar erro
+                    // @ts-ignore
+                    return vaga.cep == candidato.cepInteresse && vaga.uf.includes(candidato.ufInteresse) && vaga.cidade.includes(candidato.cidadeInteresse);
+                });
+            }
+
+            // Vai remover as vagas com areas diferentes do candidato
+            if (candidato.areas != 'Todas') {
+                vagasAllMatchFiltered = vagasAllMatch.filter(vaga => {
+                    return candidato.areas.includes(vaga.idArea2.nome);
+                });
+            }
+
+            return response.status(200).json(vagasAllMatchFiltered);
+        } catch (error) {
+            console.log(error);
+            return response.status(500).json({ message: "Erro interno do servidor" });
+        }
+    }
+
+    async indexEmpresa(request: Request, response: Response) {
+        try {
+            const {id} = request.params;
+            const vagaRepository = AppDataSource.getRepository(Vaga);
+
+            if (!id) {
+                return response.status(400).json({error: 'O parâmetro idEmpresa é obrigatório.'});
+            }
+
+            const idEmpresaNumber = parseInt(id, 10);
+
+            const vagas = await vagaRepository.find({
+                where: { idEmpresa: idEmpresaNumber }, withDeleted: true
+            });
+
+            return response.status(200).json(vagas);
+        } catch (error) {
+            console.log(error);
+            return response.status(500).json({error: 'Erro interno do servidor.'});
+        }
+    }
+
+
+    async indexEquipe(request: Request, response: Response) {
+        try {
+            const vagaRepository = AppDataSource.getRepository(Vaga);
+            const vagas = await vagaRepository.find({
+                where:
+                {idEquipe: Not(IsNull())},
+                withDeleted: true,
+                relations: ['idArea2']
+            });
+
+            return response.status(200).json(vagas);
+        } catch (error) {
+            console.error(error);
+            return response.status(500).json({ error: 'Erro interno do servidor.' });
+        }
+    }
+
+    async update(request: Request, response: Response) {
+        const file = request.file;
+
+        try {
+            if (!file) {
+                return response.status(400).json({ message: "É necessário enviar um arquivo" });
+            }
+
+            let body = JSON.parse(request.body.vaga);
+            if (body === undefined || !body) {
+                return response.status(400).json({ message: "É necessário enviar os dados da vaga" });
+            }
+
+
+            const vagaRepository = AppDataSource.getRepository(Vaga);
+            const areaRepository = AppDataSource.getRepository(Area);
+
+            const area = await areaRepository.findOneBy({idArea: request.body.idArea});
+
+            if (!area) {
+                return response.status(404).json({message: "Área não encontrada"});
+            }
+
+            let {
+                idAdministrador,
+                idEquipe,
+                idEmpresa,
+                ...vagaData
+            } = request.body;
+
+            vagaData = JSON.parse(request.body.vaga);
+
+            const vaga = await vagaRepository.findOne({ where: { idVaga: vagaData.idVaga } });
+
+            if (!vaga) {
+                return response.status(404).json({message: "Vaga não encontrada"});
+            }
+
+            idAdministrador = idAdministrador === 0 ? null : idAdministrador;
+            idEquipe = idEquipe === 0 ? null : idEquipe;
+            idEmpresa = idEmpresa === 0 ? null : idEmpresa;
+
+            vaga.idAdministrador = idAdministrador;
+            vaga.idEquipe = idEquipe;
+            vaga.idEmpresa = idEmpresa;
+            vaga.idArea = area.idArea;
+            vaga.titulo_vaga = vagaData.titulo_vaga;
+            vaga.descricao = vagaData.descricao;
+            vaga.salario = vagaData.salario;
+            vaga.cnh = vagaData.cnh;
+            vaga.tipo_vaga = vagaData.tipo_vaga;
+            vaga.modalidade = vagaData.modalidade;
+            vaga.regime = vagaData.regime;
+            vaga.cidade = vagaData.cidade;
+            vaga.uf = vagaData.uf;
+            vaga.cep = vagaData.cep;
+            vaga.email_curriculo = vagaData.email_curriculo;
+            vaga.data_limite = vagaData.data_limite;
+            vaga.imagem = file.buffer;
+
+
+
+            vagaRepository.merge(vaga, {
+                ...vagaData,
+                idAdministrador,
+                idEquipe,
+                idEmpresa,
+                idArea: area.idArea,
+            });
+
+            await vagaRepository.save(vaga);
+
+            return response.status(200).json(vaga);
+        } catch (error) {
+            console.log("Error creating vaga:", error);
+            return response.status(500).json({message: "Internal Server Error"});
+        }
+    }
+
+    async deleteByADM(request: Request, response: Response) {
+        const { id } = request.params;
+        const { idAdministradorExcluiu } = request.query; // Adiciona essa linha para obter o parâmetro da query
+        const vagaRepository = AppDataSource.getRepository(Vaga);
+        const vaga = await vagaRepository.findOneBy({ idVaga: +id });
+        if (!vaga) {
+            return response.status(404).json({ message: "Vaga não encontrada" });
+        }
+        if (idAdministradorExcluiu) {
+            vaga.idAdministradorExcluiu = +idAdministradorExcluiu;
+            if (vaga.idRepresentante) {
+                vaga.idRepresentanteExcluiu = vaga.idRepresentante;
+            }
+        }
+        vaga.deletedAt = new Date();
+        await vagaRepository.save(vaga);
+        return response.status(200).json({ message: "A Vaga foi removida" });
+    }
+
+    async deleteByEquipe(request: Request, response: Response) {
+        const { id } = request.params;
+        const { idEquipeExcluiu } = request.query; // Adiciona essa linha para obter o parâmetro da query
+        const vagaRepository = AppDataSource.getRepository(Vaga);
+        const vaga = await vagaRepository.findOneBy({ idVaga: +id });
+        if (!vaga) {
+            return response.status(404).json({ message: "Vaga não encontrada" });
+        }
+        if (idEquipeExcluiu) {
+            vaga.idEquipeExcluiu = +idEquipeExcluiu;
+        }
+        vaga.deletedAt = new Date();
+        await vagaRepository.save(vaga);
+        return response.status(200).json({ message: "A Vaga foi removida" });
+    }
+
+    async deleteByRepresentante(request: Request, response: Response) {
+        const { id } = request.params;
+        const { idRepresentanteExcluiu } = request.query; // Adiciona essa linha para obter o parâmetro da query
+        const vagaRepository = AppDataSource.getRepository(Vaga);
+        const vaga = await vagaRepository.findOneBy({ idVaga: +id });
+        if (!vaga) {
+            return response.status(404).json({ message: "Vaga não encontrada" });
+        }
+        if (idRepresentanteExcluiu) {
+            vaga.idRepresentanteExcluiu = +idRepresentanteExcluiu;
+        }
+        vaga.deletedAt = new Date();
+        await vagaRepository.save(vaga);
+        return response.status(200).json({ message: "A Vaga foi removida" });
+    }
+
+    async findById(request: Request, response: Response) {
+        const {id} = request.params;
+        const vagaRepository = AppDataSource.getRepository(Vaga);
+
+        try {
+            const vaga = await vagaRepository.findOne({
+                where: {idVaga: +id},
+                relations: ["candidatos"],
+                withDeleted: true // Carrega os candidatos associados à vaga
+            });
+
+            if (!vaga) {
+                return response.status(404).json({message: "Vaga não encontrada"});
+            }
+
+            const vagaToSend = {
+                titulo_vaga: vaga.titulo_vaga,
+                descricao: vaga.descricao,
+                salario: vaga.salario,
+                local: vaga.cidade + ' - ' + vaga.uf,
+                maisInfo: vaga.tipo_vaga + ' - ' + vaga.modalidade + ' - ' + vaga.regime,
+            }
+
+            // await sendEmailNotification(candidato, vaga.titulo_vaga, '', "perfeita");
+
+            return response.status(200).json(vaga);
+        } catch (error) {
+            return response.status(500).json({message: "Erro interno do servidor"});
+        }
+    }
+
+
+    async candidatar(request: Request, response: Response) {
+        const { idVaga, idCandidato } = request.body;
+
+
+        const vagaRepository = AppDataSource.getRepository(Vaga);
+        const candidatoRepository = AppDataSource.getRepository(Candidato);
+
+        const vaga = await vagaRepository.findOne({ where: { idVaga: +idVaga }, relations: ['candidatos'] });
+        const candidato = await candidatoRepository.findOneBy({ idCandidato });
+
+        if (!vaga) {
+            return response.status(404).json({ message: "Vaga não encontrada" });
+        }
+
+        if (!candidato) {
+            return response.status(404).json({ message: "Candidato não encontrado" });
+        }
+
+        try {
+
+            if (vaga.email_curriculo == null) {
+                return response.status(400).json({ message: "A vaga não possui email para envio de curriculo" });
+            }
+
+            if (vaga.candidatos == null) {
+                vaga.candidatos = [];
+            }
+
+            // Verifica se o candidato já está cadastrado na vaga
+            const candidatoJaCadastrado = vaga.candidatos.find(candidato => candidato.idCandidato === +idCandidato);
+
+
+            if (candidatoJaCadastrado) {
+                return response.status(400).json({ message: "Curriculo já enviado para esta vaga" });
+            }
+
+            vaga.candidatos.push(candidato);
+
+            const vagaCreated = vagaRepository.create(vaga);
+
+
+            const body = {
+                candidato,
+                vaga,
+            }
+
+
+            await sendEmailCurriculum(vaga.email_curriculo, candidato.curriculo, candidato.pcd, body);
+
+            await vagaRepository.save(vagaCreated);
+
+
+            return response.status(200).json({ message: "Curriculo enviado com sucesso" });
+
+
+        } catch (error) {
+            console.error(error);
+            return response.status(500).json({ message: "Erro interno do servidor" });
+        }
+
+    }
+
+    async reactivate(request: Request, response: Response) {
+        const {id} = request.params;
+        const vagaRepository = AppDataSource.getRepository(Vaga);
+
+        try {
+            const vaga = await vagaRepository.findOne({where: {idVaga: +id}, withDeleted: true});
+
+            if (!vaga) {
+                return response.status(404).json({message: 'Vaga não encontrada'});
+            }
+
+            if (!vaga.deletedAt) {
+                return response.status(400).json({message: 'Vaga não está deletada'});
+            }
+
+            // Removendo dados para reativar
+            vaga.deletedAt = null;
+            vaga.idAdministradorExcluiu = null;
+            vaga.idRepresentanteExcluiu = null;
+            vaga.idEquipeExcluiu = null;
+
+            // Atualizando a data de criação para a data atual
+            vaga.createdAt = new Date();
+
+            // Definindo a data limite para 30 dias após a data atual
+            const dataLimite = new Date();
+            dataLimite.setDate(dataLimite.getDate() + 30);
+            vaga.data_limite = dataLimite;
+
+            // Salvando as alterações no banco de dados
+            await vagaRepository.save(vaga);
+
+            return response.status(200).json({message: 'Vaga reativada com sucesso'});
+        } catch (error) {
+            console.error(error);
+            return response.status(500).json({message: 'Erro interno no servidor'});
+        }
+    }
+
+}
+
+// Esta função deve ser executadada depois que a vaga for criada
+// Ela deve notificar os candidatos que tem atributos iguais aos da vaga
+// Vai gerar uma lista para os candidatos que tem todos os atributos iguais a vaga
+// E uma lista com os candidatos que tem pelo menos um atributo igual a vaga
+// Anbas as listas devem gerar notificaçoes via email e push
+// Onde a de email devem conter o link para a vaga e o push deve conter o nome da vaga
+// Essa função deve ser executada de forma assincrona, pois pode demorar um pouco
+// Ela vai receber a vaga que foi criada e vai notificar os candidatos
+async function notificarCandidatos(vaga: any) {
+
+    const candidatoRepository = AppDataSource.getRepository(Candidato);
+
+    try {
+
+
+        let areaVaga = await AppDataSource.getRepository(Area).findOne({ where: { idArea: vaga.idArea } });
+        if (!areaVaga) return;
+
+        // Vai executar uma query SQL para pegar os candidatos que tem todos os atributos iguais a vaga
+        let candidatosAllMatch = await candidatoRepository.find({
+            select: ['idCandidato', 'nome', 'email', 'tokenFirebase'],
+            where: {
+                pretensaoSalarial: (Between(vaga.salario - 1000, vaga.salario + 1000) && MoreThan(0)) || Equal(vaga.salario),
+                cnh: Like('%' + vaga.cnh + '%'),
+                tipoVagaInteresse: Like('%' + vaga.tipo_vaga + '%'),
+                modalidadeInteresse: Like('%' + vaga.modalidade + '%'),
+                areas: Like('%' + areaVaga.nome + '%') || areaVaga.nome == "Todas"
+            }
+        });
+
+        // Vai remover os candidatos que tem regiao diferente da vaga
+        candidatosAllMatch = candidatosAllMatch.filter(candidato => {
+            if (candidato.regiaoInteresse) {
+
+                if (candidato.cepInteresse != null && candidato.ufInteresse != null && candidato.cidadeInteresse != null)
+                    return candidato.cepInteresse = vaga.cep || candidato.ufInteresse.includes(vaga.uf) || candidato.cidadeInteresse.includes(vaga.cidade);
+            }
+
+        });
+
+        let candidatosOneMatch = await candidatoRepository.find({
+            select: ['idCandidato', 'nome', 'email', 'tokenFirebase'],
+            where: [
+                { pretensaoSalarial: (Between(vaga.salario - 1000, vaga.salario + 1000) && MoreThan(0)) || Equal(vaga.salario) },
+                { cnh: vaga.cnh },
+                { tipoVagaInteresse: Like('%' + vaga.tipo_vaga + '%') },
+                { modalidadeInteresse: Like('%' + vaga.modalidade + '%') },
+                { areas: Like('%' + areaVaga.nome + '%') }
+            ]
+        });
+
+        const vagaToSend = {
+            titulo_vaga: vaga.titulo_vaga,
+            descricao: vaga.descricao,
+            salario: vaga.salario,
+            local: vaga.cidade + ' - ' + vaga.uf,
+            maisInfo: vaga.tipo_vaga + ' - ' + vaga.modalidade + ' - ' + vaga.regime,
+        }
+
+        for (const candidato of candidatosAllMatch) {
+            await sendEmailNotification(candidato, vagaToSend, '', "perfeita");
+            // Notificação via email
+            await sendEmailNotification(candidato, vagaToSend, '', "perfeita");
+            // Notificação via push
+            if ((candidato.tokenFirebase != undefined || candidato.tokenFirebase != null) && candidato.tokenFirebase != '') {
+                console.log(candidato.tokenFirebase)
+                await FirebaseController.sendPushNotificationToToken(candidato.tokenFirebase, vaga.titulo_vaga, "perfeita");
+            }
+
+        }
+
+        candidatosOneMatch = candidatosOneMatch.filter(candidato => !candidatosAllMatch.includes(candidato));
+
+        for (const candidato of candidatosOneMatch) {
+            // Notificação via email
+            await sendEmailNotification(candidato, vagaToSend, '', '');
+            // Notificação via push
+            if ((candidato.tokenFirebase != undefined || candidato.tokenFirebase != null) && candidato.tokenFirebase != '') {
+                console.log(candidato.tokenFirebase)
+                await FirebaseController.sendPushNotificationToToken(candidato.tokenFirebase, vaga.titulo_vaga, "");
+            }
+        }
+
+
+    } catch (error) {
+        console.log(error);
+    }
+
+}
+
+
+
+
+

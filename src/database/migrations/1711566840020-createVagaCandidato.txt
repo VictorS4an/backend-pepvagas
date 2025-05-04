@@ -1,0 +1,42 @@
+import { MigrationInterface, QueryRunner, Table, TableForeignKey } from "typeorm"
+
+export class CreateVagaCandidato1711566840020 implements MigrationInterface {
+
+    public async up(queryRunner: QueryRunner): Promise<void> {
+        // Crie a tabela de associação
+        await queryRunner.createTable(new Table({
+            name: "candidato_vaga",
+            columns: [
+                {
+                    name: "idVaga",
+                    type: "int",
+                    isPrimary: true,
+                },
+                {
+                    name: "idconta",
+                    type: "int",
+                    isPrimary: true,
+                },
+            ]
+        }), true);
+
+        await queryRunner.createForeignKey("candidato_vaga", new TableForeignKey({
+            columnNames: ["idVaga"],
+            referencedTableName: "vaga",
+            referencedColumnNames: ["idVaga"],
+            onDelete: "CASCADE", // Ou outra ação desejada
+        }));
+
+        await queryRunner.createForeignKey("candidato_vaga", new TableForeignKey({
+            columnNames: ["idconta"],
+            referencedTableName: "candidato",
+            referencedColumnNames: ["idconta"],
+            onDelete: "CASCADE", // Ou outra ação desejada
+        }));
+    }
+
+    public async down(queryRunner: QueryRunner): Promise<void> {
+        await queryRunner.dropTable("candidato_vaga");
+    }
+
+}
