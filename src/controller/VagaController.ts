@@ -8,7 +8,6 @@ import { Representante } from "../database/models/Representante";
 import fs from 'fs'
 import { MoreThan, MoreThanOrEqual } from "typeorm"
 import { Empresa } from "../database/models/Empresa"
-import FirebaseController from "./FirebaseController"
 import { Candidato } from "../database/models/Candidato"
 const nodemailer = require('nodemailer');
 
@@ -249,27 +248,6 @@ export default {
                 idVaga: novaVaga.idVaga,
                 message: "Vaga publicada com sucesso."
             })
-
-            const candidatoRepository = AppDataSource.getRepository(Candidato);
-
-            const candidatos = await candidatoRepository.findBy({
-                cidade: cidade,
-                nivelInstrucao: nivelInstrucao,
-                tipoVaga: tipo,
-                pcd: pcd,
-                pretensaoSalarial: MoreThanOrEqual(salario)
-            });
-
-            candidatos.forEach(candidato => {
-                if (candidato.tokenFirebase != null) {
-                    FirebaseController.sendPushNotificationToToken(
-                        candidato.tokenFirebase,
-                        "Vaga anunciada com características do seu interesse!!",
-                        "Título da vaga: " + titulo
-                    );
-                }
-            });
-
 
 
         } catch (error: any) {

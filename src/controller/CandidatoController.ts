@@ -8,7 +8,6 @@ import { Conta } from "../database/models/Conta";
 import { Vaga } from "../database/models/Vaga";
 import { Column, Like, Not, OneToMany } from "typeorm";
 import { Area } from "../database/models/Area";
-import FirebaseController from "./FirebaseController";
 import { sendEmailCurriculo, sendEmailCurriculoDoPerfil } from "./EmailController";
 import { string, z } from 'zod'
 import fs from 'fs'

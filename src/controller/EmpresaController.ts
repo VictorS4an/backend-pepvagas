@@ -180,7 +180,7 @@ export default {
             return response.status(200).json({ data: { message: "Empresa desativada com sucesso." } });
         } catch (error) {
             console.error("Erro ao desativar a empresa:", error);
-            return response.status(500).json({ data: { message: "Erro interno do servidor", error: error.message } });
+            return response.status(500).json({ data: { message: "Erro interno do servidor" } });
         }
     },
 
