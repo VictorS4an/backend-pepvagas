@@ -34,7 +34,11 @@ AppDataSource.initialize().then(c => {
 
 function runBackend() {
   const app = express();
-  app.use(cors())
+  app.use(cors({
+    origin: "https://frontend-pepvagas-3.onrender.com", // Substitua pelo URL exato do seu frontend
+    methods: ["GET", "POST", "PUT", "DELETE"],
+    allowedHeaders: ["Content-Type", "Authorization"],
+  }));
   app.use(express.json());
   app.use(routes);
   app.use(errors());
