@@ -8,7 +8,6 @@ import { Representante } from "../database/models/Representante";
 import fs from 'fs'
 import { MoreThan, MoreThanOrEqual } from "typeorm"
 import { Empresa } from "../database/models/Empresa"
-import { TipoUsuario } from "../../../shared/enums/TipoUsuario"
 import FirebaseController from "./FirebaseController"
 import { Candidato } from "../database/models/Candidato"
 const nodemailer = require('nodemailer');

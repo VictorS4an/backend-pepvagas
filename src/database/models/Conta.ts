@@ -1,6 +1,4 @@
 import { Column, DeleteDateColumn, Entity, OneToMany, OneToOne, PrimaryGeneratedColumn } from "typeorm";
-import { TipoUsuario } from "../../../../shared/enums/TipoUsuario";
-import { Candidato } from "./Candidato";
 import { Vaga } from "./Vaga";
 
 @Entity("conta", { schema: "db_pepvagas" })

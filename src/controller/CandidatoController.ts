@@ -3,7 +3,6 @@ import { AppDataSource } from "../database/data-source";
 import { hash } from "bcrypt";
 import * as bcrypt from "bcrypt";
 import { In, IsNull } from "typeorm";
-import { TipoUsuario } from "../../../shared/enums/TipoUsuario";
 import { Candidato } from "../database/models/Candidato";
 import { Conta } from "../database/models/Conta";
 import { Vaga } from "../database/models/Vaga";
