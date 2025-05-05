@@ -15,7 +15,11 @@ const app = express();
 
 app.use(express.json());
 
-app.use(cors());
+app.use(cors({
+  origin: "https://frontend-pepvagas-3.onrender.com", // Substitua pelo URL exato do seu frontend
+  methods: ["GET", "POST", "PUT", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
 app.use(routes);
 
 AppDataSource.initialize().then(c => {
